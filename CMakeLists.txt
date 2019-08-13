@@ -10,6 +10,12 @@ add_message_files(
     Result.msg
 )
 
+add_service_files(
+  FILES
+    MaskRcnn.srv
+    OpenImg.srv
+)
+
 
 generate_messages(
   DEPENDENCIES std_msgs sensor_msgs

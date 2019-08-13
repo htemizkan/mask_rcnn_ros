@@ -1,0 +1,57 @@
+#!/usr/bin/env python
+
+import roslib
+import rospy
+from mask_rcnn_ros.srv import MaskRcnn, MaskRcnnRequest
+from mask_rcnn_ros.srv import OpenImg, OpenImgResponse
+from sensor_msgs.msg import Image
+import cv2
+from cv_bridge import CvBridge, CvBridgeError
+from std_msgs.msg import String
+import os.path
+#from std_srvs import Empty
+
+IMG_PATH = "/home/thecreator/catkin_ws/src/mask_rcnn_ros/data/frame0000.jpg"
+
+class MaskRcnnClient:
+    def __init__(self):
+        self._image_pub = rospy.Publisher('camera/rgb/image_color', Image, queue_size=1)
+        self._bridge = CvBridge()
+        self._img_path = IMG_PATH
+
+    def call_mask_rcnn_service(self,request):
+        image  = self._open_image()
+
+        print("Publishing image...")
+        self._image_pub.publish(image)
+
+        return True
+
+
+    def _open_image(self):    
+        if not os.path.isfile(self._img_path):
+            #ignore if no such file is present.
+            print("Image file doesn't exist!")
+            return None
+        else:
+            img = cv2.imread(self._img_path)
+            #cv2.imshow('image', img)
+
+        try:
+            image_message = self._bridge.cv2_to_imgmsg(img, encoding="bgr8")
+            return image_message
+        except CvBridgeError as e:
+            print(e)
+        return None
+          
+
+if __name__ == "__main__":
+    rospy.init_node("mask_rcnn_client")
+    rospy.loginfo("Starting mask_rcnn_client")
+    mask_rcnn_client = MaskRcnnClient()
+    #Creating ROS service
+    s = rospy.Service("/mask_rcnn_client/run", OpenImg, mask_rcnn_client.call_mask_rcnn_service)
+    rospy.loginfo('Client is ready to get service calls!')
+    rospy.spin()
+    
+
