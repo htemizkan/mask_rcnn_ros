@@ -16,6 +16,7 @@ from mask_rcnn_ros import utils
 from mask_rcnn_ros import model as modellib
 from mask_rcnn_ros import visualize
 from mask_rcnn_ros.msg import Result
+from mask_rcnn_ros.srv import MaskRcnn, MaskRcnnResponse
 
 
 # Local path to trained weights file
@@ -62,6 +63,7 @@ class MaskRCNNNode(object):
                                         config=config)
         # Load weights trained on MS-COCO
         model_path = rospy.get_param('~model_path', COCO_MODEL_PATH)
+        print("model path : " + model_path)
         # Download COCO trained weights from Releases if needed
         if model_path == COCO_MODEL_PATH and not os.path.exists(COCO_MODEL_PATH):
             utils.download_trained_weights(COCO_MODEL_PATH)
@@ -77,40 +79,66 @@ class MaskRCNNNode(object):
 
         self._publish_rate = rospy.get_param('~publish_rate', 100)
 
+        self._service_name = rospy.get_param('~service_name', 'mask_rcnn_service')
+        print("service name : " + self._service_name)
+
     def run(self):
         self._result_pub = rospy.Publisher('~result', Result, queue_size=1)
+        #vis_pub = rospy.Publisher('~visualization', Image, queue_size=1)
+        #sub = rospy.Subscriber('~input', Image,
+        #                       self._image_callback, queue_size=1)
+
+        #Creating ROS service
+        s = rospy.Service(self._service_name, MaskRcnn, self._send_frame_callback)
+        print ("Ready to get requests.")
+
+        #rate = rospy.Rate(self._publish_rate)
+
+    def _send_frame_callback(self,req):
+        
+        if self._msg_lock.acquire(False):
+            self._last_msg = req.image
+            self._msg_lock.release()
+
         vis_pub = rospy.Publisher('~visualization', Image, queue_size=1)
-        sub = rospy.Subscriber('~input', Image,
-                               self._image_callback, queue_size=1)
+        #rate = rospy.Rate(self._publish_rate)
 
-        rate = rospy.Rate(self._publish_rate)
-        while not rospy.is_shutdown():
-            if self._msg_lock.acquire(False):
-                msg = self._last_msg
-                self._last_msg = None
-                self._msg_lock.release()
-            else:
-                rate.sleep()
-                continue
 
-            if msg is not None:
-                np_image = self._cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
+    #if not rospy.is_shutdown():
+        if self._msg_lock.acquire(False):
+            msg = self._last_msg
+            self._last_msg = None
+            self._msg_lock.release()
+        else:
+            rospy.sleep(10.)
+        #    rate.sleep()
+        #    continue
 
-                # Run detection
-                results = self._model.detect([np_image], verbose=0)
-                result = results[0]
-                result_msg = self._build_result_msg(msg, result)
-                self._result_pub.publish(result_msg)
+        if msg is not None:
+            np_image = self._cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
 
-                # Visualize results
-                if self._visualization:
-                    vis_image = self._visualize(result, np_image)
-                    cv_result = np.zeros(shape=vis_image.shape, dtype=np.uint8)
-                    cv2.convertScaleAbs(vis_image, cv_result)
-                    image_msg = self._cv_bridge.cv2_to_imgmsg(cv_result, 'bgr8')
-                    vis_pub.publish(image_msg)
+            # Run detection
+            results = self._model.detect([np_image], verbose=0)
+            result = results[0]
+            result_msg = self._build_result_msg(msg, result)
+            self._result_pub.publish(result_msg)
+            # Return Service Result
+            print ("Returning result...")
+            res = MaskRcnnResponse()
+            res.success = True
+            res.result = result_msg
+            return res
 
-            rate.sleep()
+
+            # Visualize results
+            if self._visualization:
+                vis_image = self._visualize(result, np_image)
+                cv_result = np.zeros(shape=vis_image.shape, dtype=np.uint8)
+                cv2.convertScaleAbs(vis_image, cv_result)
+                image_msg = self._cv_bridge.cv2_to_imgmsg(cv_result, 'bgr8')
+                vis_pub.publish(image_msg)
+
+        #rate.sleep()
 
     def _build_result_msg(self, msg, result):
         result_msg = Result()
@@ -162,17 +190,19 @@ class MaskRCNNNode(object):
         result = result.reshape((int(h), int(w), 3))
         return result
 
-    def _image_callback(self, msg):
-        rospy.logdebug("Get an image")
-        if self._msg_lock.acquire(False):
-            self._last_msg = msg
-            self._msg_lock.release()
+#    def _image_callback(self, msg):
+#        rospy.logdebug("Get an image")
+#        if self._msg_lock.acquire(False):
+#            self._last_msg = msg
+#            self._msg_lock.release()
 
 def main():
     rospy.init_node('mask_rcnn')
 
     node = MaskRCNNNode()
     node.run()
+    
+    rospy.spin()
 
 if __name__ == '__main__':
     main()

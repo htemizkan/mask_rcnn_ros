@@ -1,0 +1,5 @@
+mask_rcnn_client:
+  img_path: '/home/thecreator/catkin_ws/src/mask_rcnn_ros/data/frame0000.jpg'
+  service_name: 'mask_rcnn_service'
+mask_rcnn_node:
+  model_path: '/root/.ros/mask_rcnn_coco.h5'
