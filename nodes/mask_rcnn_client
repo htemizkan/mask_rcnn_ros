@@ -30,6 +30,7 @@ class MaskRcnnClient:
                 res = self.mask_rcnn_service(req)
                 if res.success:
                     rospy.loginfo('Success!')
+                    result_cb(res)
                 else:
                     rospy.loginfo('Failed to get result')
             except rospy.ServiceException as e:
@@ -37,6 +38,9 @@ class MaskRcnnClient:
         else:
             rospy.loginfo('Service call failed')
         return None
+
+    def result_cb(res):
+        pass
 
     def _open_image(self):    
         if not os.path.isfile(self._img_path):
